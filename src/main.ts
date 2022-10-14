@@ -64,11 +64,13 @@ const resetCover = async (): Promise<boolean> => {
 };
 
 const generateCover = async ({
+    artist,
     artists,
     title,
     thumb,
     subtitle
 }: {
+    artist: string;
     title: string;
     subtitle?: string;
     thumb: string;
@@ -115,10 +117,27 @@ const generateCover = async ({
         );
     }
 
+    if (artists.length === 0) {
+        ctx.font = "48px Regular";
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "left";
+        ctx.fillText(
+            artist,
+            coverWidth / 5 + thumbWidth / 2 + 50,
+            subtitle ? 210 : 190 + 48
+        );
+    }
+
     for (let i = 0; i < artists.length; ++i) {
         const artist = artists[i];
         const artistImage = await loadImage(artist.photo);
-        const [x, y, width, height, radius] = [coverWidth / 5 + thumbWidth / 2 + 50, 210 + i * 75, 64, 64, 7];
+        const [x, y, width, height, radius] = [
+            coverWidth / 5 + thumbWidth / 2 + 50,
+            (subtitle ? 210 : 190) + i * 75,
+            64,
+            64,
+            7
+        ];
 
         ctx.save();
 
@@ -266,6 +285,7 @@ const updateCover = async (): Promise<boolean> => {
 
     try {
         const cover = await generateCover({
+            artist,
             thumb,
             title,
             subtitle,

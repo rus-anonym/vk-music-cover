@@ -8,9 +8,13 @@ import {
 import JIMP from "jimp";
 import config from "./config";
 import path from "path";
+import moment from "moment";
 
 let latestCover = "default";
 let isGenerate = false;
+
+registerFont(path.resolve(__dirname, "../assets/heavy.ttf"), { family: "Heavy", });
+registerFont(path.resolve(__dirname, "../assets/light.ttf"), { family: "Light", });
 
 const api = new API({
     apiVersion: "5.160",
@@ -48,10 +52,11 @@ const removeCover = async (): Promise<void> => {
     await api.call("photos.removeOwnerCoverPhoto", { group_id: config.groupId, });
 };
 
-
 const resetCover = async (): Promise<boolean> => {
     if (latestCover !== "default") {
-        await uploadCover(path.resolve(__dirname, "../assets/defaultCover.jpg"));
+        await uploadCover(
+            path.resolve(__dirname, "../assets/defaultCover.jpg")
+        );
         latestCover = "default";
         return true;
     }
@@ -59,47 +64,142 @@ const resetCover = async (): Promise<boolean> => {
 };
 
 const generateCover = async ({
-    artist,
+    artists,
     title,
     thumb,
+    subtitle
 }: {
-    artist: string;
     title: string;
     subtitle?: string;
     thumb: string;
-    album?: string;
+    artists: {name: string; photo: string}[];
 }): Promise<Buffer> => {
     const [coverWidth, coverHeight] = [1590, 530];
-    const [thumbWidth, thumbHeight, thumbBackgroundBlur] = [350, 350, 3];
+    const [thumbWidth, thumbHeight, thumbBackgroundBlur] = [350, 350, 12];
 
     const thumbImage = await JIMP.read(thumb);
     const background = thumbImage.clone();
 
     background.cover(coverWidth, coverHeight);
     background.blur(thumbBackgroundBlur);
+    background.brightness(-0.5);
 
     thumbImage.resize(thumbWidth, thumbHeight);
 
-    background.blit(thumbImage, coverWidth / 2 - thumbWidth / 2, 100);
+    background.blit(thumbImage, coverWidth / 5 - thumbWidth / 2, 100);
 
     const buffer = await background.getBufferAsync(JIMP.MIME_PNG);
 
-    registerFont(path.resolve(__dirname, "../assets/font.ttf"), { family: "VK" });
     const canvas = createCanvas(coverWidth, coverHeight);
     const ctx = canvas.getContext("2d");
     const canvasCover = await loadImage(buffer);
     ctx.drawImage(canvasCover, 0, 0, coverWidth, coverHeight);
 
-    ctx.font = "48px VK";
+    ctx.font = "56px Heavy";
     ctx.fillStyle = "#fff";
+    ctx.textAlign = "left";
+    ctx.fillText(
+        title,
+        coverWidth / 5 + thumbWidth / 2 + 50,
+        150
+    );
+
+    if (subtitle) {
+        ctx.font = "36px Regular";
+        ctx.fillStyle = "#b0b0b0";
+        ctx.textAlign = "left";
+        ctx.fillText(
+            subtitle,
+            coverWidth / 5 + thumbWidth / 2 + 50,
+            190
+        );
+    }
+
+    for (let i = 0; i < artists.length; ++i) {
+        const artist = artists[i];
+        const artistImage = await loadImage(artist.photo);
+        const [x, y, width, height, radius] = [coverWidth / 5 + thumbWidth / 2 + 50, 210 + i * 75, 64, 64, 7];
+
+        ctx.save();
+
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+
+        ctx.clip();
+
+        ctx.drawImage(
+            artistImage,
+            x,
+            y,
+            width,
+            height
+        );
+
+        ctx.restore();
+
+        ctx.font = "48px Regular";
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "left";
+        ctx.fillText(
+            artist.name,
+            x + 72,
+            y + 48
+        );
+    }
+
+    ctx.font = "36px Regular";
+    ctx.fillStyle = "#b0b0b0";
     ctx.textAlign = "center";
     ctx.fillText(
-        `${title} - ${artist}`,
-        coverWidth / 2,
-        100 + thumbHeight + 50
+        moment().format("DD.MM.YYYY, HH:mm"),
+        coverWidth / 5,
+        coverHeight - 30
     );
 
     return canvas.toBuffer();
+};
+
+const loadArtistsInfo = async (
+    artists: string[]
+): Promise<
+    {
+        name: string;
+        photo: string;
+    }[]
+> => {
+    const response: {
+        name: string;
+        photo: string;
+    }[] = [];
+
+    for (const q of artists) {
+        const artists = (
+            (await api.call("audio.searchArtists", { q })) as unknown as {
+                items: {
+                    name: string;
+                    photo?: {url: string}[];
+                }[];
+            }
+        ).items;
+        const artist = artists.find((x) => x.photo !== undefined);
+        if (artist && artist.photo) {
+            response.push({
+                name: artist.name,
+                photo: artist.photo[0].url,
+            });
+        }
+    }
+
+    return response;
 };
 
 const updateCover = async (): Promise<boolean> => {
@@ -125,6 +225,7 @@ const updateCover = async (): Promise<boolean> => {
                         photo_1200?: string;
                     };
                 };
+                main_artists?: { name: string; id: string }[];
             };
         }[];
     };
@@ -136,11 +237,19 @@ const updateCover = async (): Promise<boolean> => {
     }
 
     const {
-        artist, title, subtitle, album
+        artist,
+        title,
+        subtitle,
+        album,
+        main_artists: artists,
     } = status.status_audio;
 
     if (!album.thumb) {
         return await resetCover();
+    }
+
+    if (artists) {
+        await loadArtistsInfo(artists.map((artist) => artist.name));
     }
 
     const thumb = Object.values(album.thumb)[
@@ -157,16 +266,14 @@ const updateCover = async (): Promise<boolean> => {
 
     try {
         const cover = await generateCover({
-            album: album.title,
-            artist,
             thumb,
             title,
             subtitle,
+            artists: artists ? await loadArtistsInfo(artists.map((artist) => artist.name)) : [],
         });
 
         await uploadCover(cover);
         latestCover = id;
-
     } catch (error) {
         //
     }
@@ -180,12 +287,16 @@ new Interval({
     source: updateCover,
     onDone: (res, meta): void => {
         if (res === true) {
-            console.log("Update cover", new Date(), `per ${meta.executionTime.toFixed(2)}ms`);
+            console.log(
+                "Update cover",
+                new Date(),
+                `per ${meta.executionTime.toFixed(2)}ms`
+            );
         }
     },
     onError: (err): void => {
-        console.error("Error on cover update", new Date(), err );
-    }
+        console.error("Error on cover update", new Date(), err);
+    },
 });
 
 console.log("Started at", new Date());

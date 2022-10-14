@@ -8,6 +8,7 @@ import {
 import JIMP from "jimp";
 import config from "./config";
 import path from "path";
+import os from "node:os";
 
 let latestCover = "default";
 let isGenerate = false;
@@ -181,3 +182,7 @@ new Interval({
         console.error("Error on cover update", new Date(), err );
     }
 });
+
+void ((): void => {
+    os.setPriority(os.constants.priority.PRIORITY_HIGHEST);
+})();

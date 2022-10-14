@@ -64,7 +64,6 @@ const resetCover = async (): Promise<boolean> => {
 };
 
 const generateCover = async ({
-    artist,
     artists,
     title,
     thumb,
@@ -74,7 +73,7 @@ const generateCover = async ({
     title: string;
     subtitle?: string;
     thumb: string;
-    artists: {name: string; photo: string}[];
+    artists: {name: string; photo?: string}[];
 }): Promise<Buffer> => {
     const [coverWidth, coverHeight] = [1590, 530];
     const [thumbWidth, thumbHeight, thumbBackgroundBlur] = [350, 350, 12];
@@ -117,60 +116,57 @@ const generateCover = async ({
         );
     }
 
-    if (artists.length === 0) {
-        ctx.font = "48px Regular";
-        ctx.fillStyle = "#fff";
-        ctx.textAlign = "left";
-        ctx.fillText(
-            artist,
-            coverWidth / 5 + thumbWidth / 2 + 50,
-            subtitle ? 210 : 190 + 48
-        );
-    }
+    artists.sort(x => x.photo === undefined ? 1 : -1);
 
     for (let i = 0; i < artists.length; ++i) {
         const artist = artists[i];
-        const artistImage = await loadImage(artist.photo);
-        const [x, y, width, height, radius] = [
+        const hasPhoto = artist.photo !== undefined;
+        const [x, y] = [
             coverWidth / 5 + thumbWidth / 2 + 50,
-            (subtitle ? 210 : 190) + i * 75,
-            64,
-            64,
-            7
+            (subtitle ? 210 : 190) + i * 75
         ];
 
-        ctx.save();
+        if (hasPhoto) {
+            const artistImage = await loadImage(artist.photo as string);
+            const [width, height, radius] = [
+                64,
+                64,
+                7
+            ];
 
-        ctx.beginPath();
-        ctx.moveTo(x + radius, y);
-        ctx.lineTo(x + width - radius, y);
-        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-        ctx.lineTo(x + width, y + height - radius);
-        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-        ctx.lineTo(x + radius, y + height);
-        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-        ctx.lineTo(x, y + radius);
-        ctx.quadraticCurveTo(x, y, x + radius, y);
-        ctx.closePath();
+            ctx.save();
 
-        ctx.clip();
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
 
-        ctx.drawImage(
-            artistImage,
-            x,
-            y,
-            width,
-            height
-        );
+            ctx.clip();
 
-        ctx.restore();
+            ctx.drawImage(
+                artistImage,
+                x,
+                y,
+                width,
+                height
+            );
+
+            ctx.restore();
+        }
 
         ctx.font = "48px Regular";
         ctx.fillStyle = "#fff";
         ctx.textAlign = "left";
         ctx.fillText(
             artist.name,
-            x + 72,
+            hasPhoto ? x + 75 : x,
             y + 48
         );
     }
@@ -192,12 +188,12 @@ const loadArtistsInfo = async (
 ): Promise<
     {
         name: string;
-        photo: string;
+        photo?: string;
     }[]
 > => {
     const response: {
         name: string;
-        photo: string;
+        photo?: string;
     }[] = [];
 
     for (const q of artists) {
@@ -215,6 +211,8 @@ const loadArtistsInfo = async (
                 name: artist.name,
                 photo: artist.photo[0].url,
             });
+        } else {
+            response.push({ name: q });
         }
     }
 
@@ -267,10 +265,6 @@ const updateCover = async (): Promise<boolean> => {
         return await resetCover();
     }
 
-    if (artists) {
-        await loadArtistsInfo(artists.map((artist) => artist.name));
-    }
-
     const thumb = Object.values(album.thumb)[
         Object.values(album.thumb).length - 1
     ];
@@ -289,7 +283,7 @@ const updateCover = async (): Promise<boolean> => {
             thumb,
             title,
             subtitle,
-            artists: artists ? await loadArtistsInfo(artists.map((artist) => artist.name)) : [],
+            artists: artists ? await loadArtistsInfo(artists.map((artist) => artist.name)) : [{ name: artist }],
         });
 
         await uploadCover(cover);

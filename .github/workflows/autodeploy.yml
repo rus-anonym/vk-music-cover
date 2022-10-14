@@ -1,0 +1,52 @@
+name: Deploy to server
+
+on:
+    push:
+        branches: [master]
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Retrieving modified files
+              uses: appleboy/ssh-action@master
+              with:
+                  host: ${{ secrets.SERVER_ADDRESS }}
+                  port: ${{ secrets.SERVER_PORT }}
+                  username: ${{ secrets.SERVER_USERNAME }}
+                  password: ${{ secrets.SERVER_PASSWORD }}
+                  script_stop: true
+                  script: |
+                      cd /root/vk-music-cover
+                      git fetch --all
+                      git checkout master
+                      git reset --hard origin/master
+                      git pull
+            - name: Build
+              uses: appleboy/ssh-action@master
+              with:
+                  host: ${{ secrets.SERVER_ADDRESS }}
+                  port: ${{ secrets.SERVER_PORT }}
+                  username: ${{ secrets.SERVER_USERNAME }}
+                  password: ${{ secrets.SERVER_PASSWORD }}
+                  script_stop: true
+                  script: |
+                      cd /root/vk-music-cover
+                      rm -rf ./node_modules/
+                      rm -rf ./dist/
+                      pm2 stop ./dist/main.js > /dev/null
+                      npm install --legacy-peer-deps
+                      npm run build
+            - name: Start
+              uses: appleboy/ssh-action@master
+              with:
+                  host: ${{ secrets.SERVER_ADDRESS }}
+                  port: ${{ secrets.SERVER_PORT }}
+                  username: ${{ secrets.SERVER_USERNAME }}
+                  password: ${{ secrets.SERVER_PASSWORD }}
+                  script_stop: true
+                  script: |
+                      cd /root/vk-music-cover
+                      pm2 start ./dist/main.js --name="UpdateGroupCover" > /dev/null
+            - name: Final
+              run: echo "Succesfully deployed"

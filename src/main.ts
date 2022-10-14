@@ -10,6 +10,7 @@ import config from "./config";
 import path from "path";
 
 let latestCover = "default";
+let isGenerate = false;
 
 const api = new API({
     apiVersion: "5.160",
@@ -143,20 +144,27 @@ const updateCover = async (): Promise<boolean> => {
 
     const id = `${artist} - ${title}`;
 
-    if (latestCover === id) {
+    if (latestCover === id || isGenerate) {
         return false;
     }
-    latestCover = id;
+    isGenerate = true;
 
-    const cover = await generateCover({
-        album: album.title,
-        artist,
-        thumb,
-        title,
-        subtitle,
-    });
+    try {
+        const cover = await generateCover({
+            album: album.title,
+            artist,
+            thumb,
+            title,
+            subtitle,
+        });
 
-    await uploadCover(cover);
+        await uploadCover(cover);
+        latestCover = id;
+
+    } catch (error) {
+        //
+    }
+    isGenerate = false;
 
     return true;
 };

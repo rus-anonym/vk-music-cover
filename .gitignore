@@ -12,3 +12,4 @@ package-lock.json
 # VS Code
 .vscode
 
+/src/config.ts

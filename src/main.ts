@@ -191,7 +191,7 @@ const loadArtistsInfo = async (
             }
         ).items;
         const artist = artists.find((x) => x.photo !== undefined);
-        if (artist && artist.photo) {
+        if (artist && artist.photo && artist.photo.length > 0) {
             response.push({
                 name: artist.name,
                 photo: artist.photo[0].url,

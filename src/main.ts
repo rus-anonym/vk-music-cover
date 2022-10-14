@@ -8,7 +8,6 @@ import {
 import JIMP from "jimp";
 import config from "./config";
 import path from "path";
-import os from "node:os";
 
 let latestCover = "default";
 let isGenerate = false;
@@ -44,6 +43,11 @@ const uploadCover = (
         crop_y2: 920,
     });
 };
+
+const removeCover = async (): Promise<void> => {
+    await api.call("photos.removeOwnerCoverPhoto", { group_id: config.groupId, });
+};
+
 
 const resetCover = async (): Promise<boolean> => {
     if (latestCover !== "default") {
@@ -149,6 +153,7 @@ const updateCover = async (): Promise<boolean> => {
         return false;
     }
     isGenerate = true;
+    await removeCover();
 
     try {
         const cover = await generateCover({
@@ -173,16 +178,12 @@ const updateCover = async (): Promise<boolean> => {
 new Interval({
     intervalTimer: 2500,
     source: updateCover,
-    onDone: (res): void => {
+    onDone: (res, meta): void => {
         if (res === true) {
-            console.log("Update cover", new Date());
+            console.log("Update cover", new Date(), `per ${meta.executionTime.toFixed(2)}ms`);
         }
     },
     onError: (err): void => {
         console.error("Error on cover update", new Date(), err );
     }
 });
-
-void ((): void => {
-    os.setPriority(os.constants.priority.PRIORITY_HIGHEST);
-})();

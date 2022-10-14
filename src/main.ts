@@ -69,20 +69,20 @@ const generateCover = async ({
     thumb: string;
     album?: string;
 }): Promise<Buffer> => {
-    const [coverWidth, coverHeight] = [1590, 920];
+    const [coverWidth, coverHeight] = [1590, 530];
     const [thumbWidth, thumbHeight, thumbBackgroundBlur] = [350, 350, 3];
 
     const thumbImage = await JIMP.read(thumb);
-    const backgroundThumbImage = thumbImage.clone();
-    backgroundThumbImage.gaussian(thumbBackgroundBlur);
+    const background = thumbImage.clone();
+
+    background.cover(coverWidth, coverHeight);
+    background.blur(thumbBackgroundBlur);
+
     thumbImage.resize(thumbWidth, thumbHeight);
-    const image = new JIMP(coverWidth, coverHeight);
 
-    backgroundThumbImage.cover(coverWidth, coverHeight);
-    image.composite(backgroundThumbImage, 0, 0);
-    image.composite(thumbImage, coverWidth / 2 - thumbWidth / 2, 100);
+    background.blit(thumbImage, coverWidth / 2 - thumbWidth / 2, 100);
 
-    const buffer = await image.getBufferAsync(JIMP.MIME_PNG);
+    const buffer = await background.getBufferAsync(JIMP.MIME_PNG);
 
     registerFont(path.resolve(__dirname, "../assets/font.ttf"), { family: "VK" });
     const canvas = createCanvas(coverWidth, coverHeight);
@@ -187,3 +187,5 @@ new Interval({
         console.error("Error on cover update", new Date(), err );
     }
 });
+
+console.log("Started at", new Date());

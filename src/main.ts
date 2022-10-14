@@ -170,7 +170,7 @@ const updateCover = async (): Promise<boolean> => {
 };
 
 new Interval({
-    intervalTimer: 5000,
+    intervalTimer: 2500,
     source: updateCover,
     onDone: (res): void => {
         if (res === true) {

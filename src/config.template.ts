@@ -1,11 +1,12 @@
 export interface IConfig {
-    watchers: string[];
+    fakes: string[];
     token: string;
     groupId: number;
+    fallbackUsers?: number[];
 }
 
 const config: IConfig = {
-    watchers: [],
+    fakes: [],
     token: "",
     groupId: 0
 };

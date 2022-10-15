@@ -31,12 +31,12 @@ const api = new API({
 });
 const upload = new Upload({ api });
 
-let watcherId = 0;
-const watcher = (): API => {
-    watcherId = watcherId === config.watchers.length ? 1 : watcherId + 1;
+let fakeId = 0;
+const getFake = (): API => {
+    fakeId = fakeId === config.fakes.length ? 1 : fakeId + 1;
     return new API({
         apiVersion: "5.160",
-        token: config.watchers[watcherId - 1]
+        token: config.fakes[fakeId - 1]
     });
 };
 
@@ -69,11 +69,16 @@ const removeCover = async (): Promise<boolean> => {
 };
 
 const generateCover = async ({
+    user,
     artists,
     title,
     thumb,
     subtitle
 }: {
+    user: {
+        name: string;
+        photo: string;
+    } | null;
     artist: string;
     title: string;
     subtitle?: string;
@@ -89,7 +94,7 @@ const generateCover = async ({
     if (thumb) {
         background.cover(coverWidth, coverHeight);
         background.blur(thumbBackgroundBlur);
-        background.brightness(-0.5);
+        background.brightness(-0.7);
     }
 
     thumbImage.resize(thumbWidth, thumbHeight);
@@ -115,6 +120,55 @@ const generateCover = async ({
         coverWidth / 5 + thumbWidth / 2 + 50,
         150
     );
+
+    if (user !== null) {
+        const [x, y] = [
+            coverWidth / 5 - thumbWidth / 2,
+            25
+        ];
+
+        const artistImage = await loadImage(user.photo );
+        const [width, height, radius] = [
+            64,
+            64,
+            7
+        ];
+
+        ctx.save();
+
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+
+        ctx.clip();
+
+        ctx.drawImage(
+            artistImage,
+            x,
+            y,
+            width,
+            height
+        );
+
+        ctx.restore();
+
+        ctx.font = "48px Regular";
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "left";
+        ctx.fillText(
+            user.name,
+            x + 75,
+            y + 48
+        );
+    }
 
     if (subtitle) {
         ctx.font = "36px Regular";
@@ -231,12 +285,7 @@ const loadArtistsInfo = async (
 };
 
 const updateCover = async (): Promise<boolean> => {
-    const response = (await watcher().groups.getById({
-        group_id: config.groupId,
-        fields: ["status"],
-    })) as unknown as {
-        groups: {
-            status_audio?: {
+    interface IAudioStatus {
                 artist: string;
                 title: string;
                 duration: number;
@@ -254,15 +303,53 @@ const updateCover = async (): Promise<boolean> => {
                     };
                 };
                 main_artists?: { name: string; id: string }[];
-            };
+            }
+
+    const fake = getFake();
+    const response = (await fake.groups.getById({
+        group_id: config.groupId,
+        fields: ["status"],
+    })) as unknown as {
+        groups: {
+            status_audio?: IAudioStatus;
         }[];
     };
 
-    const [status] = response.groups;
+    let status: IAudioStatus;
+    let user: {
+        name: string;
+        photo: string;
+    } | null = null;
 
-    if (!status?.status_audio) {
-        isGenerate = false;
-        return await removeCover();
+    if (!response.groups[0]?.status_audio) {
+        if (config.fallbackUsers) {
+            const fallbackUsers = (await fake.users.get({
+                user_ids: config.fallbackUsers,
+                fields: ["status", "photo_50"]
+            })) as unknown as {
+                id: number;
+                first_name: string;
+                last_name: string;
+                status_audio?: IAudioStatus;
+                photo_50: string;
+            }[];
+            const fallbackUser = fallbackUsers.find(x => x.status_audio !== undefined);
+            if (!fallbackUser) {
+                isGenerate = false;
+                return await removeCover();
+            } else {
+                status = fallbackUser.status_audio as IAudioStatus;
+                user = {
+                    name: `${fallbackUser.first_name} ${fallbackUser.last_name}`,
+                    photo: fallbackUser.photo_50
+                };
+            }
+        } else {
+            isGenerate = false;
+            return await removeCover();
+        }
+    } else {
+        status = response.groups[0].status_audio;
     }
 
     const {
@@ -271,7 +358,7 @@ const updateCover = async (): Promise<boolean> => {
         subtitle,
         album,
         main_artists: artists,
-    } = status.status_audio;
+    } = status;
 
     const thumb = album?.thumb ? Object.values(album.thumb)[
         Object.values(album.thumb).length - 1
@@ -292,6 +379,7 @@ const updateCover = async (): Promise<boolean> => {
 
     try {
         const cover = await generateCover({
+            user,
             artist,
             thumb,
             title,
@@ -313,7 +401,7 @@ const updateCover = async (): Promise<boolean> => {
 };
 
 const task = new Interval({
-    intervalTimer: Math.floor(config.watchers.length * 5000 / 24 / 60) * 1000,
+    intervalTimer: Math.floor(config.fakes.length * 5000 / 24 / 60) * 1000,
     source: updateCover,
     onDone: (res, meta): void => {
         if (res === true) {
@@ -340,6 +428,6 @@ const task = new Interval({
 
 void removeCover().then(() => {
     console.log("Started at", new Date());
-    console.log(`Update every ${Math.floor(config.watchers.length * 5000 / 24 / 60)}s`);
+    console.log(`Update every ${Math.floor(config.fakes.length * 5000 / 24 / 60)}s`);
 });
 

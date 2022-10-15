@@ -8,8 +8,9 @@ import {
 import JIMP from "jimp";
 import config from "./config";
 import path from "path";
-import moment from "moment";
+import moment, { Moment } from "moment";
 
+let latestUpdate: Moment = moment();
 let latestCover: string | null = null;
 let isGenerate = false;
 let rateLimitMultiplier = 0;
@@ -276,13 +277,18 @@ const updateCover = async (): Promise<boolean> => {
         Object.values(album.thumb).length - 1
     ] : null;
 
-    const id = `${artist} - ${title}:${moment().format("DD.MM.YYYY, HH:mm")}`;
+    const id = `${artist} - ${title}`;
+    const isOutdated = latestUpdate.isBefore(moment().subtract(1, "minute")) || latestCover !== id;
 
-    if (latestCover === id || isGenerate) {
+    if (!isOutdated) {
         return false;
     }
+
     isGenerate = true;
-    await removeCover();
+
+    if (latestCover !== id) {
+        await removeCover();
+    }
 
     try {
         const cover = await generateCover({
@@ -296,6 +302,7 @@ const updateCover = async (): Promise<boolean> => {
         if (isGenerate) {
             await uploadCover(cover);
             latestCover = id;
+            latestUpdate = moment();
         }
     } catch (error) {
         //

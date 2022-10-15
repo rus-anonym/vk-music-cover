@@ -10,7 +10,7 @@ import config from "./config";
 import path from "path";
 import moment from "moment";
 
-let latestCover = "default";
+let latestCover: string | null = null;
 let isGenerate = false;
 
 registerFont(path.resolve(__dirname, "../assets/heavy.ttf"), { family: "Heavy", });
@@ -48,16 +48,10 @@ const uploadCover = (
     });
 };
 
-const removeCover = async (): Promise<void> => {
-    await api.call("photos.removeOwnerCoverPhoto", { group_id: config.groupId, });
-};
-
-const resetCover = async (): Promise<boolean> => {
-    if (latestCover !== "default") {
-        await uploadCover(
-            path.resolve(__dirname, "../assets/defaultCover.jpg")
-        );
-        latestCover = "default";
+const removeCover = async (): Promise<boolean> => {
+    if (latestCover !== null) {
+        await api.call("photos.removeOwnerCoverPhoto", { group_id: config.groupId, });
+        latestCover = null;
         return true;
     }
     return false;
@@ -72,18 +66,20 @@ const generateCover = async ({
     artist: string;
     title: string;
     subtitle?: string;
-    thumb: string;
+    thumb: string | null;
     artists: {name: string; photo?: string}[];
 }): Promise<Buffer> => {
     const [coverWidth, coverHeight] = [1590, 530];
     const [thumbWidth, thumbHeight, thumbBackgroundBlur] = [350, 350, 12];
 
-    const thumbImage = await JIMP.read(thumb);
-    const background = thumbImage.clone();
+    const thumbImage = await JIMP.read(thumb ? thumb : path.resolve(__dirname, "../assets/defaultThumb.png"));
+    const background = thumb ? thumbImage.clone() : new JIMP(coverWidth, coverHeight, "#222222");
 
-    background.cover(coverWidth, coverHeight);
-    background.blur(thumbBackgroundBlur);
-    background.brightness(-0.5);
+    if (thumb) {
+        background.cover(coverWidth, coverHeight);
+        background.blur(thumbBackgroundBlur);
+        background.brightness(-0.5);
+    }
 
     thumbImage.resize(thumbWidth, thumbHeight);
 
@@ -249,8 +245,8 @@ const updateCover = async (): Promise<boolean> => {
 
     const [status] = response.groups;
 
-    if (!status?.status_audio?.album) {
-        return await resetCover();
+    if (!status?.status_audio) {
+        return await removeCover();
     }
 
     const {
@@ -261,13 +257,9 @@ const updateCover = async (): Promise<boolean> => {
         main_artists: artists,
     } = status.status_audio;
 
-    if (!album.thumb) {
-        return await resetCover();
-    }
-
-    const thumb = Object.values(album.thumb)[
+    const thumb = album?.thumb ? Object.values(album.thumb)[
         Object.values(album.thumb).length - 1
-    ];
+    ] : null;
 
     const id = `${artist} - ${title}`;
 
@@ -313,4 +305,7 @@ new Interval({
     },
 });
 
-console.log("Started at", new Date());
+void removeCover().then(() => {
+    console.log("Started at", new Date());
+});
+

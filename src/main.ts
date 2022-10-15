@@ -1,7 +1,7 @@
 import {
-    API, Upload, UploadSourceValue
+    API, Upload, UploadSourceValue, VKError
 } from "vk-io";
-import { Interval } from "@rus-anonym/scheduler";
+import { Interval, Timeout } from "@rus-anonym/scheduler";
 import {
     createCanvas, loadImage, registerFont
 } from "canvas";
@@ -12,6 +12,7 @@ import moment from "moment";
 
 let latestCover: string | null = null;
 let isGenerate = false;
+let rateLimitMultiplier = 0;
 
 registerFont(path.resolve(__dirname, "../assets/heavy.ttf"), { family: "Heavy", });
 registerFont(path.resolve(__dirname, "../assets/light.ttf"), { family: "Light", });
@@ -288,8 +289,8 @@ const updateCover = async (): Promise<boolean> => {
     return true;
 };
 
-new Interval({
-    intervalTimer: 2500,
+const task = new Interval({
+    intervalTimer: 5000,
     source: updateCover,
     onDone: (res, meta): void => {
         if (res === true) {
@@ -299,9 +300,18 @@ new Interval({
                 `per ${meta.executionTime.toFixed(2)}ms`
             );
         }
+        rateLimitMultiplier = 0;
     },
     onError: (err): void => {
-        console.error("Error on cover update", new Date(), err);
+        if (err instanceof VKError && err.code === 29) {
+            rateLimitMultiplier++;
+            task.pause();
+            new Timeout(task.unpause.bind(task), 30000 * rateLimitMultiplier);
+            console.log(new Date(), `RateLimit: paused ${30 * rateLimitMultiplier}sec`);
+        } else {
+            console.error("Error on cover update", new Date(), err);
+        }
+        void removeCover();
     },
 });
 

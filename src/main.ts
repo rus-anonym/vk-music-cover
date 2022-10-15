@@ -105,6 +105,10 @@ const generateCover = async ({
     ctx.font = "56px Heavy";
     ctx.fillStyle = "#fff";
     ctx.textAlign = "left";
+
+    const calculatedSize = ((coverWidth - (coverWidth / 5 + thumbWidth / 2 + 50)) / ctx.measureText(title).width) * 56;
+    const fontSize = calculatedSize > 56 ? 56 : calculatedSize;
+    ctx.font = `${Math.floor(fontSize)}px Heavy`;
     ctx.fillText(
         title,
         coverWidth / 5 + thumbWidth / 2 + 50,
@@ -256,6 +260,7 @@ const updateCover = async (): Promise<boolean> => {
     const [status] = response.groups;
 
     if (!status?.status_audio) {
+        isGenerate = false;
         return await removeCover();
     }
 
@@ -271,7 +276,7 @@ const updateCover = async (): Promise<boolean> => {
         Object.values(album.thumb).length - 1
     ] : null;
 
-    const id = `${artist} - ${title}`;
+    const id = `${artist} - ${title}:${moment().format("DD.MM.YYYY, HH:mm")}`;
 
     if (latestCover === id || isGenerate) {
         return false;
@@ -288,8 +293,10 @@ const updateCover = async (): Promise<boolean> => {
             artists: artists ? await loadArtistsInfo(artists.map((artist) => artist.name)) : [{ name: artist }],
         });
 
-        await uploadCover(cover);
-        latestCover = id;
+        if (isGenerate) {
+            await uploadCover(cover);
+            latestCover = id;
+        }
     } catch (error) {
         //
     }
@@ -299,7 +306,7 @@ const updateCover = async (): Promise<boolean> => {
 };
 
 const task = new Interval({
-    intervalTimer: 5000,
+    intervalTimer: Math.floor(config.watchers.length * 5000 / 24 / 60) * 1000,
     source: updateCover,
     onDone: (res, meta): void => {
         if (res === true) {
@@ -326,5 +333,6 @@ const task = new Interval({
 
 void removeCover().then(() => {
     console.log("Started at", new Date());
+    console.log(`Update every ${Math.floor(config.watchers.length * 5000 / 24 / 60)}s`);
 });
 

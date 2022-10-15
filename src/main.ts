@@ -30,6 +30,15 @@ const api = new API({
 });
 const upload = new Upload({ api });
 
+let watcherId = 0;
+const watcher = (): API => {
+    watcherId = watcherId === config.watchers.length ? 1 : watcherId + 1;
+    return new API({
+        apiVersion: "5.160",
+        token: config.watchers[watcherId - 1]
+    });
+};
+
 const uploadCover = (
     value: UploadSourceValue
 ): Promise<{
@@ -217,7 +226,7 @@ const loadArtistsInfo = async (
 };
 
 const updateCover = async (): Promise<boolean> => {
-    const response = (await api.groups.getById({
+    const response = (await watcher().groups.getById({
         group_id: config.groupId,
         fields: ["status"],
     })) as unknown as {

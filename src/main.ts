@@ -14,7 +14,8 @@ let latestUpdate: Moment = moment();
 let latestCover: string | null = null;
 let isGenerate = false;
 let rateLimitMultiplier = 0;
-const intervalTimer = Math.floor(60 / (config.fakes.length * 15000 / 24 / 60) ) * 1000;
+const intervalTimer =
+    Math.floor(60 / ((config.fakes.length * 15000) / 24 / 60)) * 1000;
 
 registerFont(path.resolve(__dirname, "../assets/heavy.ttf"), { family: "Heavy", });
 registerFont(path.resolve(__dirname, "../assets/light.ttf"), { family: "Light", });
@@ -69,6 +70,28 @@ const removeCover = async (): Promise<boolean> => {
     return false;
 };
 
+const calculateFont = ({
+    ctx,
+    text,
+    font,
+    defaultSize,
+    width,
+}: {
+    ctx: CanvasRenderingContext2D;
+    text: string;
+    font: "Heavy" | "Regular" | "Light";
+    defaultSize: number;
+    width: number;
+}): string => {
+    ctx.font = `${defaultSize}px ${font}`;
+
+    const calculatedSize = (width / ctx.measureText(text).width) * 56;
+
+    const size = calculatedSize > defaultSize ? defaultSize : calculatedSize;
+
+    return `${size}px ${font}`;
+};
+
 const generateCover = async ({
     user,
     artists,
@@ -113,22 +136,23 @@ const generateCover = async ({
     const canvasCover = await loadImage(buffer);
     ctx.drawImage(canvasCover, 0, 0, coverWidth, coverHeight);
 
-    ctx.font = "56px Heavy";
+    const contentX = coverWidth / 5 + thumbWidth / 2 + 50;
+
+    ctx.font = calculateFont({
+        ctx,
+        defaultSize: 56,
+        font: "Heavy",
+        text: title,
+        width: coverWidth - contentX,
+    });
     ctx.fillStyle = "#fff";
     ctx.textAlign = "left";
-
-    const calculatedSize =
-        ((coverWidth - (coverWidth / 5 + thumbWidth / 2 + 50)) /
-            ctx.measureText(title).width) *
-        56;
-    const fontSize = calculatedSize > 56 ? 56 : calculatedSize;
-    ctx.font = `${Math.floor(fontSize)}px Heavy`;
-    ctx.fillText(title, coverWidth / 5 + thumbWidth / 2 + 50, 150);
+    ctx.fillText(title, contentX, 150);
 
     if (user !== null) {
-        const [x, y] = [coverWidth / 5 - thumbWidth / 2, 25];
+        const [x, y] = [coverWidth - 400, coverHeight - 84];
 
-        const artistImage = await loadImage(user.photo);
+        const avatar = await loadImage(user.photo);
         const [width, height, radius] = [64, 64, 7];
 
         ctx.save();
@@ -152,21 +176,33 @@ const generateCover = async ({
 
         ctx.clip();
 
-        ctx.drawImage(artistImage, x, y, width, height);
+        ctx.drawImage(avatar, x, y, width, height);
 
         ctx.restore();
 
-        ctx.font = "48px Regular";
+        ctx.font = calculateFont({
+            ctx,
+            defaultSize: 48,
+            font: "Regular",
+            text: user.name,
+            width: 225
+        });
         ctx.fillStyle = "#fff";
         ctx.textAlign = "left";
         ctx.fillText(user.name, x + 75, y + 48);
     }
 
     if (subtitle) {
-        ctx.font = "36px Regular";
+        ctx.font = calculateFont({
+            ctx,
+            defaultSize: 36,
+            font: "Regular",
+            text: subtitle,
+            width: coverWidth - contentX,
+        });
         ctx.fillStyle = "#b0b0b0";
         ctx.textAlign = "left";
-        ctx.fillText(subtitle, coverWidth / 5 + thumbWidth / 2 + 50, 190);
+        ctx.fillText(subtitle, contentX, 190);
     }
 
     artists.sort((x) => (x.photo === undefined ? 1 : -1));
@@ -174,10 +210,7 @@ const generateCover = async ({
     for (let i = 0; i < artists.length; ++i) {
         const artist = artists[i];
         const hasPhoto = artist.photo !== undefined;
-        const [x, y] = [
-            coverWidth / 5 + thumbWidth / 2 + 50,
-            (subtitle ? 210 : 170) + i * 75,
-        ];
+        const [x, y] = [contentX, (subtitle ? 210 : 170) + i * 75];
 
         if (hasPhoto) {
             const artistImage = await loadImage(artist.photo as string);
@@ -209,7 +242,13 @@ const generateCover = async ({
             ctx.restore();
         }
 
-        ctx.font = "48px Regular";
+        ctx.font = calculateFont({
+            ctx,
+            defaultSize: 48,
+            font: "Regular",
+            text: artist.name,
+            width: coverWidth - (hasPhoto ? x + 75 : x),
+        });
         ctx.fillStyle = "#fff";
         ctx.textAlign = "left";
         ctx.fillText(artist.name, hasPhoto ? x + 75 : x, y + 48);
@@ -282,6 +321,7 @@ const updateCover = async (): Promise<boolean> => {
             };
         };
         main_artists?: { name: string; id: string }[];
+        featured_artists?: { name: string; id: string }[];
     }
 
     const fake = getFake();
@@ -329,7 +369,7 @@ const updateCover = async (): Promise<boolean> => {
     }
 
     const {
-        artist, title, subtitle, album, main_artists: artists
+        artist, title, subtitle, album
     } = status;
 
     const thumb = album?.thumb
@@ -351,6 +391,19 @@ const updateCover = async (): Promise<boolean> => {
         await removeCover();
     }
 
+    const artistsList = [
+        ...(status.main_artists ? status.main_artists.map((x) => x.name) : []),
+        ...(status.featured_artists
+            ? status.featured_artists.map((x) => x.name)
+            : []),
+    ];
+
+    const artists = await loadArtistsInfo(
+        artistsList.length > 0
+            ? artistsList
+            : [artist]
+    );
+
     try {
         const cover = await generateCover({
             user,
@@ -358,9 +411,7 @@ const updateCover = async (): Promise<boolean> => {
             thumb,
             title,
             subtitle,
-            artists: artists
-                ? await loadArtistsInfo(artists.map((artist) => artist.name))
-                : [{ name: artist }],
+            artists,
         });
 
         if (isGenerate) {
@@ -375,7 +426,6 @@ const updateCover = async (): Promise<boolean> => {
 
     return true;
 };
-
 
 const task = new Interval({
     intervalTimer,
@@ -408,8 +458,6 @@ const task = new Interval({
 
 void removeCover().then(() => {
     console.log("Started at", new Date());
-    console.log(
-        `Update every ${intervalTimer / 1000}s`
-    );
+    console.log(`Update every ${intervalTimer / 1000}s`);
     void task.execute();
 });

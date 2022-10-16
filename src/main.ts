@@ -14,6 +14,7 @@ let latestUpdate: Moment = moment();
 let latestCover: string | null = null;
 let isGenerate = false;
 let rateLimitMultiplier = 0;
+const intervalTimer = Math.floor(60 / (config.fakes.length * 15000 / 24 / 60) ) * 1000;
 
 registerFont(path.resolve(__dirname, "../assets/heavy.ttf"), { family: "Heavy", });
 registerFont(path.resolve(__dirname, "../assets/light.ttf"), { family: "Light", });
@@ -36,7 +37,7 @@ const getFake = (): API => {
     fakeId = fakeId === config.fakes.length ? 1 : fakeId + 1;
     return new API({
         apiVersion: "5.160",
-        token: config.fakes[fakeId - 1]
+        token: config.fakes[fakeId - 1],
     });
 };
 
@@ -73,7 +74,7 @@ const generateCover = async ({
     artists,
     title,
     thumb,
-    subtitle
+    subtitle,
 }: {
     user: {
         name: string;
@@ -83,13 +84,17 @@ const generateCover = async ({
     title: string;
     subtitle?: string;
     thumb: string | null;
-    artists: {name: string; photo?: string}[];
+    artists: { name: string; photo?: string }[];
 }): Promise<Buffer> => {
     const [coverWidth, coverHeight] = [1590, 530];
     const [thumbWidth, thumbHeight, thumbBackgroundBlur] = [350, 350, 12];
 
-    const thumbImage = await JIMP.read(thumb ? thumb : path.resolve(__dirname, "../assets/defaultThumb.png"));
-    const background = thumb ? thumbImage.clone() : new JIMP(coverWidth, coverHeight, "#222222");
+    const thumbImage = await JIMP.read(
+        thumb ? thumb : path.resolve(__dirname, "../assets/defaultThumb.png")
+    );
+    const background = thumb
+        ? thumbImage.clone()
+        : new JIMP(coverWidth, coverHeight, "#222222");
 
     if (thumb) {
         background.cover(coverWidth, coverHeight);
@@ -112,27 +117,19 @@ const generateCover = async ({
     ctx.fillStyle = "#fff";
     ctx.textAlign = "left";
 
-    const calculatedSize = ((coverWidth - (coverWidth / 5 + thumbWidth / 2 + 50)) / ctx.measureText(title).width) * 56;
+    const calculatedSize =
+        ((coverWidth - (coverWidth / 5 + thumbWidth / 2 + 50)) /
+            ctx.measureText(title).width) *
+        56;
     const fontSize = calculatedSize > 56 ? 56 : calculatedSize;
     ctx.font = `${Math.floor(fontSize)}px Heavy`;
-    ctx.fillText(
-        title,
-        coverWidth / 5 + thumbWidth / 2 + 50,
-        150
-    );
+    ctx.fillText(title, coverWidth / 5 + thumbWidth / 2 + 50, 150);
 
     if (user !== null) {
-        const [x, y] = [
-            coverWidth / 5 - thumbWidth / 2,
-            25
-        ];
+        const [x, y] = [coverWidth / 5 - thumbWidth / 2, 25];
 
-        const artistImage = await loadImage(user.photo );
-        const [width, height, radius] = [
-            64,
-            64,
-            7
-        ];
+        const artistImage = await loadImage(user.photo);
+        const [width, height, radius] = [64, 64, 7];
 
         ctx.save();
 
@@ -141,7 +138,12 @@ const generateCover = async ({
         ctx.lineTo(x + width - radius, y);
         ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
         ctx.lineTo(x + width, y + height - radius);
-        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.quadraticCurveTo(
+            x + width,
+            y + height,
+            x + width - radius,
+            y + height
+        );
         ctx.lineTo(x + radius, y + height);
         ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
         ctx.lineTo(x, y + radius);
@@ -150,54 +152,36 @@ const generateCover = async ({
 
         ctx.clip();
 
-        ctx.drawImage(
-            artistImage,
-            x,
-            y,
-            width,
-            height
-        );
+        ctx.drawImage(artistImage, x, y, width, height);
 
         ctx.restore();
 
         ctx.font = "48px Regular";
         ctx.fillStyle = "#fff";
         ctx.textAlign = "left";
-        ctx.fillText(
-            user.name,
-            x + 75,
-            y + 48
-        );
+        ctx.fillText(user.name, x + 75, y + 48);
     }
 
     if (subtitle) {
         ctx.font = "36px Regular";
         ctx.fillStyle = "#b0b0b0";
         ctx.textAlign = "left";
-        ctx.fillText(
-            subtitle,
-            coverWidth / 5 + thumbWidth / 2 + 50,
-            190
-        );
+        ctx.fillText(subtitle, coverWidth / 5 + thumbWidth / 2 + 50, 190);
     }
 
-    artists.sort(x => x.photo === undefined ? 1 : -1);
+    artists.sort((x) => (x.photo === undefined ? 1 : -1));
 
     for (let i = 0; i < artists.length; ++i) {
         const artist = artists[i];
         const hasPhoto = artist.photo !== undefined;
         const [x, y] = [
             coverWidth / 5 + thumbWidth / 2 + 50,
-            (subtitle ? 210 : 190) + i * 75
+            (subtitle ? 210 : 170) + i * 75,
         ];
 
         if (hasPhoto) {
             const artistImage = await loadImage(artist.photo as string);
-            const [width, height, radius] = [
-                64,
-                64,
-                7
-            ];
+            const [width, height, radius] = [64, 64, 7];
 
             ctx.save();
 
@@ -206,7 +190,12 @@ const generateCover = async ({
             ctx.lineTo(x + width - radius, y);
             ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
             ctx.lineTo(x + width, y + height - radius);
-            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.quadraticCurveTo(
+                x + width,
+                y + height,
+                x + width - radius,
+                y + height
+            );
             ctx.lineTo(x + radius, y + height);
             ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
             ctx.lineTo(x, y + radius);
@@ -215,13 +204,7 @@ const generateCover = async ({
 
             ctx.clip();
 
-            ctx.drawImage(
-                artistImage,
-                x,
-                y,
-                width,
-                height
-            );
+            ctx.drawImage(artistImage, x, y, width, height);
 
             ctx.restore();
         }
@@ -229,11 +212,7 @@ const generateCover = async ({
         ctx.font = "48px Regular";
         ctx.fillStyle = "#fff";
         ctx.textAlign = "left";
-        ctx.fillText(
-            artist.name,
-            hasPhoto ? x + 75 : x,
-            y + 48
-        );
+        ctx.fillText(artist.name, hasPhoto ? x + 75 : x, y + 48);
     }
 
     ctx.font = "36px Regular";
@@ -266,7 +245,7 @@ const loadArtistsInfo = async (
             (await api.call("audio.searchArtists", { q })) as unknown as {
                 items: {
                     name: string;
-                    photo?: {url: string}[];
+                    photo?: { url: string }[];
                 }[];
             }
         ).items;
@@ -286,33 +265,28 @@ const loadArtistsInfo = async (
 
 const updateCover = async (): Promise<boolean> => {
     interface IAudioStatus {
-                artist: string;
-                title: string;
-                duration: number;
-                subtitle?: string;
-                album?: {
-                    title?: string;
-                    thumb?: {
-                        photo_34?: string;
-                        photo_68?: string;
-                        photo_135?: string;
-                        photo_270?: string;
-                        photo_300?: string;
-                        photo_600?: string;
-                        photo_1200?: string;
-                    };
-                };
-                main_artists?: { name: string; id: string }[];
-            }
+        artist: string;
+        title: string;
+        duration: number;
+        subtitle?: string;
+        album?: {
+            title?: string;
+            thumb?: {
+                photo_34?: string;
+                photo_68?: string;
+                photo_135?: string;
+                photo_270?: string;
+                photo_300?: string;
+                photo_600?: string;
+                photo_1200?: string;
+            };
+        };
+        main_artists?: { name: string; id: string }[];
+    }
 
     const fake = getFake();
-    const response = (await fake.groups.getById({
-        group_id: config.groupId,
-        fields: ["status"],
-    })) as unknown as {
-        groups: {
-            status_audio?: IAudioStatus;
-        }[];
+    const response = (await fake.status.get({ group_id: config.groupId, })) as unknown as {
+        audio?: IAudioStatus;
     };
 
     let status: IAudioStatus;
@@ -321,11 +295,11 @@ const updateCover = async (): Promise<boolean> => {
         photo: string;
     } | null = null;
 
-    if (!response.groups[0]?.status_audio) {
+    if (!response.audio) {
         if (config.fallbackUsers) {
             const fallbackUsers = (await fake.users.get({
                 user_ids: config.fallbackUsers,
-                fields: ["status", "photo_50"]
+                fields: ["status", "photo_50"],
             })) as unknown as {
                 id: number;
                 first_name: string;
@@ -333,7 +307,9 @@ const updateCover = async (): Promise<boolean> => {
                 status_audio?: IAudioStatus;
                 photo_50: string;
             }[];
-            const fallbackUser = fallbackUsers.find(x => x.status_audio !== undefined);
+            const fallbackUser = fallbackUsers.find(
+                (x) => x.status_audio !== undefined
+            );
             if (!fallbackUser) {
                 isGenerate = false;
                 return await removeCover();
@@ -341,7 +317,7 @@ const updateCover = async (): Promise<boolean> => {
                 status = fallbackUser.status_audio as IAudioStatus;
                 user = {
                     name: `${fallbackUser.first_name} ${fallbackUser.last_name}`,
-                    photo: fallbackUser.photo_50
+                    photo: fallbackUser.photo_50,
                 };
             }
         } else {
@@ -349,23 +325,21 @@ const updateCover = async (): Promise<boolean> => {
             return await removeCover();
         }
     } else {
-        status = response.groups[0].status_audio;
+        status = response.audio;
     }
 
     const {
-        artist,
-        title,
-        subtitle,
-        album,
-        main_artists: artists,
+        artist, title, subtitle, album, main_artists: artists
     } = status;
 
-    const thumb = album?.thumb ? Object.values(album.thumb)[
-        Object.values(album.thumb).length - 1
-    ] : null;
+    const thumb = album?.thumb
+        ? Object.values(album.thumb)[Object.values(album.thumb).length - 1]
+        : null;
 
     const id = `${artist} - ${title}`;
-    const isOutdated = latestUpdate.isBefore(moment().subtract(1, "minute")) || latestCover !== id;
+    const isOutdated =
+        latestUpdate.isBefore(moment().subtract(1, "minute")) ||
+        latestCover !== id;
 
     if (!isOutdated) {
         return false;
@@ -384,7 +358,9 @@ const updateCover = async (): Promise<boolean> => {
             thumb,
             title,
             subtitle,
-            artists: artists ? await loadArtistsInfo(artists.map((artist) => artist.name)) : [{ name: artist }],
+            artists: artists
+                ? await loadArtistsInfo(artists.map((artist) => artist.name))
+                : [{ name: artist }],
         });
 
         if (isGenerate) {
@@ -400,8 +376,9 @@ const updateCover = async (): Promise<boolean> => {
     return true;
 };
 
+
 const task = new Interval({
-    intervalTimer: Math.floor(config.fakes.length * 5000 / 24 / 60) * 1000,
+    intervalTimer,
     source: updateCover,
     onDone: (res, meta): void => {
         if (res === true) {
@@ -418,7 +395,10 @@ const task = new Interval({
             rateLimitMultiplier++;
             task.pause();
             new Timeout(task.unpause.bind(task), 30000 * rateLimitMultiplier);
-            console.log(new Date(), `RateLimit: paused ${30 * rateLimitMultiplier}sec`);
+            console.log(
+                new Date(),
+                `RateLimit: paused ${30 * rateLimitMultiplier}sec`
+            );
         } else {
             console.error("Error on cover update", new Date(), err);
         }
@@ -428,6 +408,8 @@ const task = new Interval({
 
 void removeCover().then(() => {
     console.log("Started at", new Date());
-    console.log(`Update every ${Math.floor(config.fakes.length * 5000 / 24 / 60)}s`);
+    console.log(
+        `Update every ${intervalTimer / 1000}s`
+    );
+    void task.execute();
 });
-

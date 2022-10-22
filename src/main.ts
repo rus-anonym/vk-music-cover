@@ -431,6 +431,7 @@ const updateCover = async (): Promise<boolean> => {
 const task = new Interval({
     intervalTimer,
     source: updateCover,
+    isNextExecutionAfterDone: true,
     onDone: (res, meta): void => {
         if (res === true) {
             console.log(

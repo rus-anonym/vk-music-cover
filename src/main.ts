@@ -15,8 +15,9 @@ let latestCover: string | null = null;
 let isGenerate = false;
 let rateLimitMultiplier = 0;
 
-const intervalSeconds = Math.floor(60 / ((config.fakes.length * 5000) / 24 / 60));
-const intervalTimer = (intervalSeconds <= 1 ? 1 : intervalSeconds) * 1000;
+const minimalIntervalSeconds = 5;
+const intervalSeconds = Math.floor(60 / ((config.fakes.length * 2500) / 24 / 60));
+const intervalTimer = (intervalSeconds <= minimalIntervalSeconds ? minimalIntervalSeconds : intervalSeconds) * 1000;
 
 registerFont(path.resolve(__dirname, "../assets/heavy.ttf"), { family: "Heavy", });
 registerFont(path.resolve(__dirname, "../assets/light.ttf"), { family: "Light", });

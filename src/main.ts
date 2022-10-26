@@ -112,7 +112,7 @@ const generateCover = async ({
     artists: { name: string; photo?: string }[];
 }): Promise<Buffer> => {
     const [coverWidth, coverHeight] = [1590, 530];
-    const [thumbWidth, thumbHeight, thumbBackgroundBlur] = [350, 350, 12];
+    const [thumbWidth, thumbHeight, thumbBackgroundBlur] = [300, 300, 12];
 
     const thumbImage = await JIMP.read(
         thumb ? thumb : path.resolve(__dirname, "../assets/defaultThumb.png")
@@ -138,7 +138,7 @@ const generateCover = async ({
     const canvasCover = await loadImage(buffer);
     ctx.drawImage(canvasCover, 0, 0, coverWidth, coverHeight);
 
-    const contentX = coverWidth / 5 + thumbWidth / 2 + 50;
+    const contentX = coverWidth / 5 + thumbWidth / 2 + thumbWidth * 0.075;
 
     ctx.font = calculateFont({
         ctx,
@@ -152,7 +152,7 @@ const generateCover = async ({
     ctx.fillText(title, contentX, 150);
 
     if (user !== null) {
-        const [x, y] = [coverWidth - 400, coverHeight - 84];
+        const [x, y] = [coverWidth - 400, 100 + thumbHeight];
 
         const avatar = await loadImage(user.photo);
         const [width, height, radius] = [64, 64, 7];
@@ -256,13 +256,20 @@ const generateCover = async ({
         ctx.fillText(artist.name, hasPhoto ? x + 75 : x, y + 48);
     }
 
-    ctx.font = "36px Regular";
+    const dateTime = moment().format("DD.MM.YYYY, HH:mm");
+    ctx.font = calculateFont({
+        ctx,
+        defaultSize: 36,
+        font: "Regular",
+        text: dateTime,
+        width: thumbWidth,
+    });
     ctx.fillStyle = "#b0b0b0";
     ctx.textAlign = "center";
     ctx.fillText(
-        moment().format("DD.MM.YYYY, HH:mm"),
+        dateTime,
         coverWidth / 5,
-        coverHeight - 30
+        100 + thumbHeight + thumbHeight * 0.15
     );
 
     return canvas.toBuffer();
